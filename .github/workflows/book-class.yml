@@ -2,7 +2,7 @@ name: Auto Book Cult Class
 
 on:
   schedule:
-    - cron: '5 10 * * *'
+    - cron: '5 16 * * *'
   workflow_dispatch:
 
 jobs:
