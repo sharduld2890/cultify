@@ -515,9 +515,9 @@ Find workout ID and name from API response in logs.
 Main booking flow in `index.js`:
 
 ```javascript
-co(function* () {
+async function main() {
     // 1. Fetch classes
-    let classes = yield makeAPICall(...);
+    let classes = await makeAPICall(...);
     
     // 2. Check existing bookings
     if (hasBookingForDate(...)) return;
@@ -527,11 +527,11 @@ co(function* () {
         slots = getSlots(...);
         if (slots.length > 0) {
             // 4. Book first match
-            yield bookClass(slots[0].id);
+            await bookClass(slots[0].id);
             break;
         }
     }
-});
+}
 ```
 
 ## API Details

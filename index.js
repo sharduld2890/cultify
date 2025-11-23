@@ -1,6 +1,5 @@
 "use strict";
 const https = require('https'),
-    co = require('co'),
     config = require('./config'),
     /*
     Maintaining a list of activities and my preference
@@ -89,54 +88,56 @@ function hasBookingForDate(classesForDay) {
     return false;
 }
 
-co(function* () {
-    let classes = yield makeAPICall({}, CURE_FIT_HOST, URI.GET_CLASSES, HTTP_GET, commonHeaders);
-    let date = classes.days[classes.days.length - 1].id;
-    
-    console.log(`Booking for ${date}`);
-    
-    if (hasBookingForDate(classes.classByDateMap[date])) {
-        console.log(`Already booked on ${date}. Skipping.`);
-        return;
-    }
-    
-    let slots = [];
-    
-    for (let slot of PREFERRED_SLOTS) {
-        slots = getSlots(classes.classByDateMap[date], slot, PREFERRED_CLASSES_IN_ORDER);
+async function main() {
+    try {
+        let classes = await makeAPICall({}, CURE_FIT_HOST, URI.GET_CLASSES, HTTP_GET, commonHeaders);
+        let date = classes.days[classes.days.length - 1].id;
         
-        if (slots.length > 0) {
-            let classInfo = slots[0];
-            console.log(`Found ${PREFERRED_WORKOUT_NAME} at ${slot} on ${date}`);
-            
-            if (classInfo.state === 'WAITLIST_AVAILABLE') {
-                let waitlistCount = classInfo.waitlistInfo && classInfo.waitlistInfo.waitlistedUserCount || 0;
-                console.log(`Joining waitlist (${waitlistCount} people ahead)`);
-            } else {
-                console.log(`Booking (${classInfo.availableSeats} seats available)`);
-            }
-            
-            yield bookClass(classInfo.id);
-            console.log("Class booked successfully!");
-            break;
+        console.log(`Booking for ${date}`);
+        
+        if (hasBookingForDate(classes.classByDateMap[date])) {
+            console.log(`Already booked on ${date}. Skipping.`);
+            return;
         }
+        
+        let slots = [];
+        
+        for (let slot of PREFERRED_SLOTS) {
+            slots = getSlots(classes.classByDateMap[date], slot, PREFERRED_CLASSES_IN_ORDER);
+            
+            if (slots.length > 0) {
+                let classInfo = slots[0];
+                console.log(`Found ${PREFERRED_WORKOUT_NAME} at ${slot} on ${date}`);
+                
+                if (classInfo.state === 'WAITLIST_AVAILABLE') {
+                    let waitlistCount = classInfo.waitlistInfo && classInfo.waitlistInfo.waitlistedUserCount || 0;
+                    console.log(`Joining waitlist (${waitlistCount} people ahead)`);
+                } else {
+                    console.log(`Booking (${classInfo.availableSeats} seats available)`);
+                }
+                
+                await bookClass(classInfo.id);
+                console.log("Class booked successfully!");
+                break;
+            }
+        }
+        
+        if (slots.length === 0) {
+            console.log(`No ${PREFERRED_WORKOUT_NAME} classes available on ${date}`);
+        }
+    } catch (error) {
+        errorHandler(error);
     }
-    
-    if (slots.length === 0) {
-        console.log(`No ${PREFERRED_WORKOUT_NAME} classes available on ${date}`);
-    }
-}).then(function () {
-}, function (error) {
-    errorHandler(error);
-});
-
-
-function* bookClass(activityID) {
-    return yield makeAPICall({}, CURE_FIT_HOST, "/api/cult/class/" + activityID + "/book", HTTP_POST, commonHeaders)
-
 }
 
-function* makeAPICall(request, host, path, method, headers) {
+main();
+
+
+async function bookClass(activityID) {
+    return await makeAPICall({}, CURE_FIT_HOST, "/api/cult/class/" + activityID + "/book", HTTP_POST, commonHeaders);
+}
+
+function makeAPICall(request, host, path, method, headers) {
     if (config.userAgent) {
         headers['User-Agent'] = config.userAgent;
     }
