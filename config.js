@@ -39,6 +39,12 @@ function parseCurlCommand(curlString) {
     } else if (cookieMatchB) {
         config.cookies = cookieMatchB[1];
     }
+    
+    // Inject city cookie if missing to prevent geolocation errors on GitHub Actions
+    const preferredCity = process.env.PREFERRED_CITY || 'Hyderabad';
+    if (config.cookies && !config.cookies.includes('city=')) {
+        config.cookies += `; city=${preferredCity};`;
+    }
 
     console.log("--- DEBUG INFO ---");
     console.log("Cookies parsed?", !!config.cookies);
