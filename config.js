@@ -9,35 +9,43 @@ function parseCurlCommand(curlString) {
         timezone: "",
         cookies: "",
         userAgent: "",
-        referer: ""
+        referer: "",
+        authorization: ""
     };
 
-    const apikeyMatch = curlString.match(/-H\s+'apikey:\s*([^']+)'/);
-    if (apikeyMatch) config.apiKey = apikeyMatch[1];
+    // Helper function to extract headers more robustly
+    const extractHeader = (name) => {
+        // Matches -H 'name: value' or --header "name: value"
+        const regex = new RegExp(`(?:-H|--header)\\s+['"]?${name}:\\s*([^'"\\\\]+)`, 'i');
+        const match = curlString.match(regex);
+        return match ? match[1].trim() : "";
+    };
 
-    const appversionMatch = curlString.match(/-H\s+'appversion:\s*([^']+)'/);
-    if (appversionMatch) config.appVersion = appversionMatch[1];
+    config.apiKey = extractHeader('apikey') || "9d153009-e961-4718-a343-2a36b0a1d1fd";
+    config.appVersion = extractHeader('appversion') || "7";
+    config.browserName = extractHeader('browsername') || "Chrome";
+    config.osName = extractHeader('osname') || "browser";
+    config.timezone = extractHeader('timezone') || "Asia/Kolkata";
+    config.userAgent = extractHeader('user-agent');
+    config.referer = extractHeader('referer');
+    config.authorization = extractHeader('authorization');
 
-    const browsernameMatch = curlString.match(/-H\s+'browsername:\s*([^']+)'/);
-    if (browsernameMatch) config.browserName = browsernameMatch[1];
-
-    const osnameMatch = curlString.match(/-H\s+'osname:\s*([^']+)'/);
-    if (osnameMatch) config.osName = osnameMatch[1];
-
-    const timezoneMatch = curlString.match(/-H\s+'timezone:\s*([^']+)'/);
-    if (timezoneMatch) config.timezone = timezoneMatch[1];
-
-    const cookieMatch = curlString.match(/-b\s+'([^']+)'/);
-    if (cookieMatch) {
-        config.cookies = cookieMatch[1];
+    // Parse cookies from either -b flag or -H cookie: header
+    const cookieMatchB = curlString.match(/-b\s+['"]([^'"]+)['"]/);
+    const cookieMatchH = extractHeader('cookie');
+    
+    if (cookieMatchH) {
+        config.cookies = cookieMatchH;
+    } else if (cookieMatchB) {
+        config.cookies = cookieMatchB[1];
     }
 
-    const userAgentMatch = curlString.match(/-H\s+'user-agent:\s*([^']+)'/);
-    if (userAgentMatch) config.userAgent = userAgentMatch[1];
-
-    const refererMatch = curlString.match(/-H\s+'referer:\s*([^']+)'/);
-    if (refererMatch) config.referer = refererMatch[1];
-
+    console.log("--- DEBUG INFO ---");
+    console.log("Cookies parsed?", !!config.cookies);
+    console.log("API Key parsed/defaulted?", !!config.apiKey);
+    console.log("Auth header parsed?", !!config.authorization);
+    console.log("------------------");
+    
     return config;
 }
 
@@ -65,8 +73,8 @@ if (process.env.CURL_COMMAND) {
 }
 
 config.preferredCenter = process.env.PREFERRED_CENTER ? parseInt(process.env.PREFERRED_CENTER) : null;
-config.preferredSlots = process.env.PREFERRED_SLOTS ? process.env.PREFERRED_SLOTS.split(',') : null;
-config.preferredWorkout = process.env.PREFERRED_WORKOUT || null;
+config.preferredSlots = process.env.PREFERRED_SLOTS ? process.env.PREFERRED_SLOTS.split(',').map(s => s.trim()) : null;
+config.preferredWorkouts = process.env.PREFERRED_WORKOUT ? process.env.PREFERRED_WORKOUT.split(',').map(w => w.trim()) : null;
 config.enableWaitlist = process.env.ENABLE_WAITLIST !== 'false';
 
 module.exports = config;

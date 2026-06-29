@@ -71,12 +71,19 @@ const HTTP_POST = "POST",
 
 const PREFERRED_SLOTS = config.preferredSlots || ['09:00:00'];
 const PREFERRED_CENTER = config.preferredCenter || 1515;
-const PREFERRED_WORKOUT_NAME = config.preferredWorkout || "HRX WORKOUT";
+const PREFERRED_WORKOUT_NAMES = config.preferredWorkouts || ["HRX WORKOUT"];
 const ENABLE_WAITLIST = config.enableWaitlist !== false;
 
-const PREFERRED_CLASSES_IN_ORDER = Object.values(ActivityType).filter(
-    activity => activity.name === PREFERRED_WORKOUT_NAME
-);
+const PREFERRED_CLASSES_IN_ORDER = [];
+let currentPreference = 1;
+PREFERRED_WORKOUT_NAMES.forEach(name => {
+    let matches = Object.values(ActivityType).filter(activity => activity.name === name);
+    matches.forEach(m => {
+        let cloned = Object.assign({}, m);
+        cloned.preference = currentPreference++;
+        PREFERRED_CLASSES_IN_ORDER.push(cloned);
+    });
+});
 
 function hasBookingForDate(classesForDay) {
     for (let timeSlot of classesForDay.classByTimeList) {
@@ -107,15 +114,23 @@ async function main() {
         
         let slots = [];
         
+        let booked = false;
+        
         for (let slot of PREFERRED_SLOTS) {
-            slots = getSlots(classes.classByDateMap[date], slot, PREFERRED_CLASSES_IN_ORDER);
+            let availableClassesInSlot = getSlots(classes.classByDateMap[date], slot, PREFERRED_CLASSES_IN_ORDER);
             
-            if (slots.length > 0) {
-                let classInfo = slots[0];
-                console.log(`Found ${PREFERRED_WORKOUT_NAME} at ${slot} on ${date}`);
+            for (let classInfo of availableClassesInSlot) {
+                let waitlistCount = classInfo.waitlistInfo && classInfo.waitlistInfo.waitlistedUserCount || 0;
+                
+                // If it's waitlist and >= 15 people are waiting, skip it and look for the next preferred class
+                if (classInfo.state === 'WAITLIST_AVAILABLE' && waitlistCount >= 15) {
+                    console.log(`Skipping ${classInfo.workoutName} at ${slot} (Waitlist too long: ${waitlistCount} ahead)`);
+                    continue; 
+                }
+                
+                console.log(`Found ${classInfo.workoutName} at ${slot} on ${date}`);
                 
                 if (classInfo.state === 'WAITLIST_AVAILABLE') {
-                    let waitlistCount = classInfo.waitlistInfo && classInfo.waitlistInfo.waitlistedUserCount || 0;
                     console.log(`Joining waitlist (${waitlistCount} people ahead)`);
                 } else {
                     console.log(`Booking (${classInfo.availableSeats} seats available)`);
@@ -123,12 +138,14 @@ async function main() {
                 
                 await bookClass(classInfo.id);
                 console.log("Class booked successfully!");
-                break;
+                booked = true;
+                break; // Break inner loop (classes)
             }
+            if (booked) break; // Break outer loop (slots)
         }
         
-        if (slots.length === 0) {
-            console.log(`No ${PREFERRED_WORKOUT_NAME} classes available on ${date}`);
+        if (!booked) {
+            console.log(`No matching classes (${PREFERRED_WORKOUT_NAMES.join(', ')}) with acceptable waitlist available on ${date}`);
         }
     } catch (error) {
         errorHandler(error);
@@ -148,6 +165,9 @@ async function makeAPICall(request, host, path, method, headers) {
     }
     if (config.referer) {
         headers['referer'] = config.referer;
+    }
+    if (config.authorization) {
+        headers['authorization'] = config.authorization;
     }
 
     const url = `https://${host}${path}`;
